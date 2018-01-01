@@ -17,7 +17,6 @@ https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi
  [ 0.34093502]]
 
 ===== NETWORK OUTPUT
-
   Iteration 0 accuracy: 92.3961630031%
   Iteration 1000 accuracy: 99.9517935871%
   Iteration 2000 accuracy: 99.9762884656%
