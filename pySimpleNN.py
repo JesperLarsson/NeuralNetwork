@@ -11,6 +11,12 @@
 # hidden layers
 # read test data from file (xml/json?)
 
+"""
+CODE START
+"""
+import numpy as np
+from math import *
+from datetime import *
 
 # Each row is a training sample of 3 input nodes each (3x1 matrix)
 input_tests = np.array([
@@ -26,13 +32,8 @@ input_tests = np.array([
 # Expected values, T function (transpose) switches columns for rows
 expected_outputs = np.array([[0,0,1,1,1,0,1,1]]).T
 
-
-
-"""
-CODE START
-"""
-import numpy as np
-from math import *
+# Config
+target_accuracy = 99.99
 
 np.random.seed(1)
 
@@ -47,17 +48,19 @@ syn_0 = 2*np.random.random((3,4)) - 1 # 3 inputs (from test data) => 4 outputs (
 syn_1 = 2*np.random.random((4,1)) - 1 # 4 inputs, 1 output (final value)
 
 # Print starting synapses
-print("===== RANDOM WEIGHTS")
-print("Synapse 0:")
+print("===== INITIAL (RANDOMIZED) WEIGHTS")
 print(str(syn_0))
-print("Synapse 1:")
 print(str(syn_1))
-print("=====")
+print("")
 
 # First layer is our input training data
 l0 = input_tests
 
-for iter in xrange(100000):
+# Mainloop
+print("===== NETWORK OUTPUT")
+start_time = datetime.now()
+print
+for iter in xrange(1000000):
     # Calculate values and non-linearize them
     l1 = nonlin(np.dot(l0,syn_0))
     l2 = nonlin(np.dot(l1,syn_1))
@@ -75,27 +78,30 @@ for iter in xrange(100000):
     syn_0 += np.dot(l0.T,l1_delta)
 
     # Print every now and then
-    if iter % 1000 == 0:
-        print("  Iteration " + str(iter) + " accuracy: " + str(100 * (1 - (np.mean(np.abs(l1_error))))) + "%")
+    current_accuracy = 100 * (1 - (np.mean(np.abs(l1_error))))
+    if (iter % 1000 == 0):
+        print("  Iteration " + str(iter) + " accuracy: " + str(current_accuracy) + "%")
+        
+    # Good enough
+    if (current_accuracy >= target_accuracy):
+        print("  Finished on iteration " + str(iter) +
+              " with accuracy: " + str(current_accuracy) +
+              "% in " + str((datetime.now() - start_time).total_seconds()) + "s")
+        break
+print("")
 
 print("===== CALCULATED WEIGHTS")
-print("Synapse 0:")
 print(str(syn_0))
-print("Synapse 1:")
 print(str(syn_1))
-print("=====")
+print("")
 
 # Print details,
 print("===== FINAL RESULTS")
-accumilator = 0.0
 output_layer = l2
 for i in xrange(len(l1)):
     output_value = output_layer[i][0] # 0 because we only have a single output result
     expected_value = expected_outputs[i][0]
     value_diff = fabs(expected_value - output_value)
-    accumilator += value_diff
     print("  Test " + (str(i + 1)) + ". " + str(output_value) + ". Expected " + str(expected_value) + ". Diff = " + str(value_diff))
-    
-accuracy = 100 * (1 - (accumilator / len(l1)))
-print("Network final accuracy: " + str(accuracy) + "%")
+print("")
 
