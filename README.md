@@ -1,9 +1,12 @@
 # About this project #
 Simple experimentation with neural networks in Python 3.
 
-# Math  #
-Concepts and math is based on this Youtube series by 3Blue1Brown (highly recommended):
+# Math  and resources #
+Youtube series by 3Blue1Brown (highly recommended introduction!):
 https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi
+
+State-of-the-art articles:
+http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html
 
 # Sample run #
 <pre>
