@@ -27,7 +27,7 @@ input_tests = np.array([
                 [1,0,1],
                 ])
 # Expected values, T function (transpose) switches columns for rows
-expected_outputs = np.array([[0,0,1,1, 1,0,1,1]]).T
+expected_outputs = np.array([[0,0,1,1,1,0,1,1]]).T
 
 # Randomize synapse layer 0 to start
 l0_to_l1_weights = 2*np.random.random((3,1)) - 1
@@ -38,7 +38,7 @@ print(str(l0_to_l1_weights))
 l0 = input_tests
 
 # Mainloop
-for iter in xrange(500000):
+for iter in xrange(100000):
     # Calculate second layer (our output layer)
     l1 = nonlin(np.dot(l0,l0_to_l1_weights))
 
@@ -50,14 +50,15 @@ for iter in xrange(500000):
     l0_to_l1_weights += np.dot(l0.T,l1_delta)
 
     # Print every now and then
-    if iter % 10000 == 0:
-        print("  Current average accuracy: " + str(100 * (1 - (np.mean(np.abs(l1_error))))) + " %")
+    if iter % 1000 == 0:
+        print("  Iteration " + str(iter) + " accuracy: " + str(100 * (1 - (np.mean(np.abs(l1_error))))) + " %")
 
-print("Final weights:")
+print("===== FINAL WEIGHTS")
+print("Synapse 0:")
 print(str(l0_to_l1_weights))
 print("=====")
 
-# Print details
+# Print details,
 print("RESULTS:")
 accumilator = 0.0
 for i in xrange(len(l1)):
