@@ -1,7 +1,7 @@
 # About this project #
-Simple experimentation with neural networks in Python 3.
+My personal experimentation with neural networks in Python 3.
 
-# Math  and resources #
+# Math and resources #
 Youtube series by 3Blue1Brown (highly recommended introduction!):
 https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi
 
