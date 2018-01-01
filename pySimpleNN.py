@@ -4,14 +4,16 @@
 """
 CONFIGURATION
 """
-# Basic config
-target_accuracy = 99.9
-training_mode = True
+# Basic
+target_accuracy = 99.9       # stops when network training accuracy has been achieved
+training_mode = True         # disable when running real data
+max_training_time = 60 * 5
 
-# Advanced config
-alpha = 0.5
-hidden_dim = 4
-dropout_percent = 0.2
+# Advanced
+alpha = 0.5                  # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
+dropout_percent = 0.1        # dropout rate
+hidden_dim = 4               # dimensions in hidden layers
+random_seed = 1              # a fixed seed is usually fine, so that we can reproduce tests
 
 """
 SETUP
@@ -19,8 +21,12 @@ SETUP
 import numpy as np
 from math import *
 from datetime import *
-np.random.seed(1)
 
+np.random.seed(random_seed)
+
+"""
+TEST DATA
+"""
 # Each row is a training sample of 3 input nodes each (3x1 matrix)
 input_tests = np.array([
                 [0,0,1],   
@@ -35,11 +41,16 @@ input_tests = np.array([
 # Expected values, T function (transpose) switches columns for rows
 expected_outputs = np.array([[0,0,1,1,1,0,1,1]]).T
 
-# Sigmoid activation function and its derivative (maps any linear value to non-linear space between 0 and 1)
+"""
+FUNCTIONS AND CLASSES
+"""
+# Sigmoid activation function and its derivative (maps any value to non-linear space between 0 and 1)
 def nonlin(x):
     return 1/(1+np.exp(-x))
 def nonlin_derive(x):
     return x*(1-x)
+def sigmoid_to_deriv(output): # Gets the slope (derivative) for a non-linearized VALUE rather than a point
+    return output*(1-output)
 
 """
 CODE START
@@ -61,13 +72,16 @@ input_layer = l0
 # Mainloop
 print("===== NETWORK OUTPUT")
 start_time = datetime.now()
-for iter in xrange(1000000):
-    # Calculate values and non-linearize them
+last_trace = 0
+iteration = 0
+while(True):
+    iteration += 1
+    
+    # Calculate values and squish them
     l1 = nonlin(np.dot(l0,syn_0))
     l2 = nonlin(np.dot(l1,syn_1))
 
-    # Dropout, only when training the network
-    #   Discards some values at random to avoid descending multiple nodes into the same (local) minimum
+    # Hinton's dropout (only when training) - discards some values at random to avoid descending multiple nodes into the same (local) minimum
     if (training_mode):
         l1 *= np.random.binomial([np.ones((len(input_layer),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
@@ -85,24 +99,35 @@ for iter in xrange(1000000):
 
     # Print every now and then
     current_accuracy = 100 * (1 - (np.mean(np.abs(l2_error))))
-    if (iter % 1000 == 0):
-        print("  Iteration " + str(iter) + " accuracy: " + str(current_accuracy) + "%")
-        
-    # Good enough
+    uptime = (datetime.now() - start_time).total_seconds()
+    if (int(uptime) > int(last_trace)):
+        print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
+        last_trace = uptime
+    
+    # Results are good enough    
     if (current_accuracy >= target_accuracy):
-        print("  Achieved target " + str(target_accuracy) + " on iteration " + str(iter) +
-              " with accuracy: " + str(current_accuracy) +
-              "% in " + str((datetime.now() - start_time).total_seconds()) + "s")
+        print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
+              " training steps with average test accuracy: " + str(current_accuracy) +
+              "% in " + str(uptime) + "s")
         break
+
+    # Timeout
+    if (uptime > max_training_time):
+        print("  TIMEOUT after " + str(iteration) +
+              " training steps with average test accuracy: " + str(current_accuracy) +
+              "% in " + str(uptime) + "s")
+        break
+
+
 output_layer = l2
 print("")
 
+# Print details
 print("===== CALCULATED WEIGHTS")
 print(str(syn_0))
 print(str(syn_1))
 print("")
 
-# Print details
 print("===== FINAL RESULTS")
 for i in xrange(len(l1)):
     output_value = output_layer[i][0] # 0 because we only have a single output result
