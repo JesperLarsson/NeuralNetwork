@@ -3,6 +3,13 @@
 
 # TODO:
 # multiple layers, needs backpropogation
+# multiple output nodes
+# synapse bias
+# mini-batching
+# batch normalization
+# hidden layers
+# read test data from file (xml/json?)
+
 
 import numpy as np
 from math import *
@@ -51,7 +58,7 @@ for iter in xrange(100000):
 
     # Print every now and then
     if iter % 1000 == 0:
-        print("  Iteration " + str(iter) + " accuracy: " + str(100 * (1 - (np.mean(np.abs(l1_error))))) + " %")
+        print("  Iteration " + str(iter) + " accuracy: " + str(100 * (1 - (np.mean(np.abs(l1_error))))) + "%")
 
 print("===== FINAL WEIGHTS")
 print("Synapse 0:")
@@ -69,5 +76,5 @@ for i in xrange(len(l1)):
     print("  Test " + (str(i + 1)) + ". " + str(output_value) + ". Expected " + str(expected_value) + ". Diff = " + str(value_diff))
     
 accuracy = 100 * (1 - (accumilator / len(l1)))
-print("Network final accuracy: " + str(accuracy) + " %")
+print("Network final accuracy: " + str(accuracy) + "%")
 
