@@ -5,19 +5,24 @@
 CONFIGURATION
 """
 # Training
-target_accuracy = 99.9
+target_accuracy = 99.9 # percentage training confidence
 max_training_time = 0 # training timeout in seconds, 0 = no timeout
 
 # Algorithm tweaks
-starting_alpha = 10 # relative change performed on each delta, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want. 1 = no alpha
+dynamic_alpha = True
+starting_alpha = 10 # relative change performed on each delta, lower values makes us less likely to "overshoot" our target minimum, but it can take longer to get close to the result we want. 1 = no alpha
+
 use_dropout = True
 dropout_percent = 0.1
+
+use_bias = False # bias not fully implemented yet, has no dynamic weights
+synapse_bias = -1.0 # typically 1.0 or -1.0, allows an offset of each layer: https://stackoverflow.com/questions/2480650/role-of-bias-in-neural-networks
 
 # Network layout
 hidden_layers = 2 # number of hidden layers
 hidden_dimensions = 4
 
-# Test data - input/output dimensions are inherintly tied to the training data
+# Input and output dimensions are inherintly tied to the training data
 input_dimensions = 3
 output_dimensions = 1
 
@@ -82,6 +87,8 @@ def sigmoid(x):
 def sigmoid_slope(x):
     return x*(1-x)
 
+def cost_function(target, calculated):
+   return target - calculated
 
 """    
 # Input training data sample
@@ -97,22 +104,27 @@ class TrainingCase:
 # Connection between two layers
 class Synapse:
    weights = None
+   input_dimensions = 0
+   output_dimensions = 0
    name = "N/A"
 
    def __init__(self, synapse_input_dimensions, synapse_output_dimensions, synapse_name):
       # Randomize synapse weights with mean value = 0
       self.weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
-      self.name = synapse_name
-      print("  Created " + self.name + "(" + str(synapse_input_dimensions) + "/" + str(synapse_output_dimensions) + " dimensions)")
+      self.input_dimensions = synapse_input_dimensions
+      self.output_dimensions = synapse_output_dimensions
 
-# Holds a matrix of all neurons
+      self.name = synapse_name
+      print("  Created " + self.name + "(" + str(synapse_input_dimensions) + " inputs / " + str(synapse_output_dimensions) + " outputs)")
+
 class Layer:
       neurons = None
+
       next_layer = None
       previous_layer = None
-      synapse_to_next_layer = None # Synapse object
-      name = "N/A"
+      synapse_to_next_layer = None
 
+      name = "N/A"
       error_rate = 1.0
 
       def __init__(self, layer_name):
@@ -120,8 +132,9 @@ class Layer:
          self.name = layer_name
 
       # Simple implementation of Hinton's dropout algorithm
-      #   This optimizes away (by luck) some edge cases where multiple search paths are converging towards the same (local) minimum by discarding some connections at random
-      def hinton_dropout(self):
+      #   This optimizes away some edge cases where multiple search paths are converging towards the same (local) minimum by discarding some connections at random
+      #   Taken from here: http://iamtrask.github.io/2015/07/28/dropout/
+      def perform_dropout(self):
          if (self.previous_layer is None):
             # No dropout for input layer
             return
@@ -137,15 +150,19 @@ class Layer:
          if (self.next_layer is None):
             return # this layer does non forward propagate (output layer)
 
-         self.next_layer.neurons = sigmoid( np.dot(self.neurons, self.synapse_to_next_layer.weights) )
+         weighted_neurons = np.dot(self.neurons, self.synapse_to_next_layer.weights)
+         if (use_bias):
+            weighted_neurons = (weighted_neurons + synapse_bias)            
+
+         self.next_layer.neurons = sigmoid( weighted_neurons )
     
       # Back propagate synapse weight deltas from the back and forwards
-      # Recursive implementation, call on first(!) layer to backpropagate entire chain
+      #   Recursive implementation, call on first(!) layer to update the entire chain
       def back_propagation(self):
          if (self.next_layer is None):
             # "Confidence weighted error":
             #   This is the last layer, it compares to expected test data rather than to the next layer and never has a synapse to update            
-            self.error_rate = expected_outputs - self.neurons
+            self.error_rate = cost_function(expected_outputs, self.neurons)
             weights_delta = self.error_rate * sigmoid_slope(self.neurons)
             
             return weights_delta
@@ -177,13 +194,20 @@ class Network:
 
       # Dropout (optimization) - only use dropout when training
       if (self.training_mode and use_dropout):
-        [l.hinton_dropout() for l in self.layers]
+        [l.perform_dropout() for l in self.layers]
 
-      # Calculate backward propagation deltas recursively
+      # Calculate synapse weight deltas
       self.layers[0].back_propagation()
 
    def load_test_data(self):
-      self.layers[0].neurons = input_tests
+      testdata = input_tests
+
+      # Insert bias value
+      #if (use_bias):
+      #   testdata = insert_bias(testdata)
+
+      self.layers[0].neurons = testdata
+      return len(self.layers[0].neurons)
 
    # Return debug string of the entire network
    def to_string(self, include_layers = False, include_synapses = True):
@@ -222,7 +246,6 @@ class Network:
 
       return output
 
-
    # Trains the network until a sufficiently high accuracy has been achieved
    def main_loop_training(self):
       start_time = datetime.now()
@@ -237,7 +260,7 @@ class Network:
          # Print intermittently
          current_accuracy = 100 * (1 - (np.mean(np.abs(network_error_rate))))
          uptime = (datetime.now() - start_time).total_seconds()
-         if (int(uptime) > int(last_trace) or last_trace == 0):
+         if (int(uptime) > int(last_trace) or iteration <= 5):
            print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
            last_trace = uptime
 
@@ -254,8 +277,7 @@ class Network:
                  " training steps with average test accuracy: " + str(current_accuracy) +
                  "% in " + str(uptime) + "s")
            return False
-       
-       
+
    def __init__(self):
       # Create layers
       for iter in range(layer_count):
@@ -281,6 +303,10 @@ class Network:
             # Last obj special case
             synapse_output_dimensions = output_dimensions
 
+         # Add bias dimension
+         #if (use_bias):
+         #   synapse_input_dimensions += 1
+
          new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
          self.synapses.append(new_synapse)
 
@@ -295,17 +321,18 @@ class Network:
 CODE ENTRY POINT
 """
 print("===== INITIATING NETWORK")
-print("  Targeting " + str(target_accuracy) + "% accuracy")
 network = Network()
-network.load_test_data()
+test_count = network.load_test_data()
+print("  Loaded " + str(test_count) + " test samples")
 print("")
 
-print("===== STARTING NETWORK")
-print(network.to_string())
-print("")
+#print("===== RANDOMIZED STARTING NETWORK")
+#print(network.to_string())
+#print("")
 
 # Start training
-print("===== NETWORK TRAINING")
+print("===== TRAINING")
+print("  Targeting " + str(target_accuracy) + "% training accuracy")
 success = network.main_loop_training()
 if (success):
    network.training_mode = False
