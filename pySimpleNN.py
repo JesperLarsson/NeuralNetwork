@@ -5,18 +5,20 @@
 CONFIGURATION
 """
 # Training
-target_accuracy = 99.95
+target_accuracy = 99.9
 max_training_time = 0 # training timeout in seconds, 0 = no timeout
 
 # Algorithm tweaks
-starting_alpha = 10 # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
+starting_alpha = 10 # relative change performed on each delta, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want. 1 = no alpha
 use_dropout = True
 dropout_percent = 0.1
 
 # Network layout
-hidden_layers = 1 # number of hidden layers
+hidden_layers = 2 # number of hidden layers
 hidden_dimensions = 4
-input_dimensions = 3 # input/output dimensions are inherintly tied to the training data
+
+# Test data - input/output dimensions are inherintly tied to the training data
+input_dimensions = 3
 output_dimensions = 1
 
 
@@ -40,8 +42,7 @@ except ImportError:
       pip.main(['install', "numpy"])
       import numpy as np
    except ImportError:
-      #  install using "pip install numpy" when in path C:\Python3\Scripts
-      print("Unable to find numpy")
+      print("Unable to install numpy, install using 'pip install numpy' in path C:\Python3\Scripts")
       input("Press enter to exit")
       sys.exit(2)
 
@@ -49,6 +50,7 @@ from math import *
 from datetime import *
 
 np.random.seed(1) # easier debugging without true seed
+nl = "\n"
 
 alpha = starting_alpha
 
@@ -183,7 +185,45 @@ class Network:
    def load_test_data(self):
       self.layers[0].neurons = input_tests
 
-   # Trains the network until a sufficiently high efficiency has been achieved
+   # Return debug string of the entire network
+   def to_string(self, include_layers = False, include_synapses = True):
+      output = ""
+
+      layer_counter = 0
+      for layer in self.layers:
+         # Layer neurons
+         if (include_layers):
+            output += layer.name + ":" + nl
+
+            if (layer is None or layer.neurons is None):
+               output += "  Uninitialized" + nl
+            else:
+               for neuron in layer.neurons:
+                  output += "  " + str(neuron) + nl
+            output += nl
+
+         # Synapse weights
+         if (include_synapses and layer.synapse_to_next_layer is not None):
+            output += layer.synapse_to_next_layer.name + ":" + nl
+
+            fromnode_w_counter = 0
+            for fromnode_w in layer.synapse_to_next_layer.weights:
+               output += "  From Node " + str(fromnode_w_counter) + ":" + nl
+               tonode_w_counter = 0
+               for tonode_w in fromnode_w:
+                  output += "    To Node " + str(tonode_w_counter) + ": " + str(tonode_w) + nl
+                  tonode_w_counter += 1
+
+               fromnode_w_counter += 1
+
+            output += nl
+
+         layer_counter += 1
+
+      return output
+
+
+   # Trains the network until a sufficiently high accuracy has been achieved
    def main_loop_training(self):
       start_time = datetime.now()
       last_trace = 0
@@ -192,10 +232,10 @@ class Network:
          iteration += 1
 
          self.network_tick()
-         output_error_rate = self.layers[-1].error_rate
+         network_error_rate = self.layers[-1].error_rate
 
          # Print intermittently
-         current_accuracy = 100 * (1 - (np.mean(np.abs(output_error_rate))))
+         current_accuracy = 100 * (1 - (np.mean(np.abs(network_error_rate))))
          uptime = (datetime.now() - start_time).total_seconds()
          if (int(uptime) > int(last_trace) or last_trace == 0):
            print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
@@ -255,15 +295,13 @@ class Network:
 CODE ENTRY POINT
 """
 print("===== INITIATING NETWORK")
-print("  Targetting " + str(target_accuracy) + "% accuracy")
+print("  Targeting " + str(target_accuracy) + "% accuracy")
 network = Network()
 network.load_test_data()
 print("")
 
-# Print starting synapse weights
-print("===== STARTING WEIGHTS")
-for iter in network.synapses:
-   print(iter.name + " = " + str(iter.weights))
+print("===== STARTING NETWORK")
+print(network.to_string())
 print("")
 
 # Start training
@@ -273,10 +311,8 @@ if (success):
    network.training_mode = False
 print("")
 
-# Print details
-print("===== CALCULATED WEIGHTS")
-for iter in network.synapses:
-   print(iter.name + " = " + str(iter.weights))
+print("===== TRAINED NETWORK")
+print(network.to_string())
 print("")
 
 # Trace test results, this trace only supports 1-dimension outputs
