@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-# Copyright Jesper Larsson 2018, Linkoping
+# Copyright Jesper Larsson 2018, github.com/JesperLarsson
 
-print("")
 """
 CONFIGURATION
 """
 # Basic
 target_accuracy = 99.99
 training_mode = True
+randomization_mode = False
 max_training_time = 60 * 5
 
 # Algorithm
@@ -41,11 +41,14 @@ except ImportError:
 from math import *
 from datetime import *
 
-np.random.seed(1)
+if (randomization_mode):
+   np.random.seed(1) # easy data replication / debugging
+else:
+   np.random.seed(int(datetime.now().total_seconds)
 
 alpha = starting_alpha
 
-layer_count = hidden_layers + 2 # hidden layers + input + output
+layer_count = hidden_layers + 2 # + input + output
 
 """
 TEST DATA
@@ -73,7 +76,8 @@ def sigmoid(x):
 def sigmoid_slope(x):
     return x*(1-x)
 
-    
+
+"""    
 # Input training data sample
 class TrainingCase:
     input_values = None
@@ -82,14 +86,16 @@ class TrainingCase:
     def __init__(self, _input_values, _expected_result):
         input_values = _input_values
         expected_result = _expected_result
-
+"""
 
 class Synapse:
     weights = None
+    name = "N/A"
 
-    def __init__(self, input_dimensions, output_dimensions):
-      # Randomize starting weights
-      weights = 2*np.random.random((input_dimensions,output_dimensions)) - 1
+    def __init__(self, synapse_input_dimensions, synapse_output_dimensions, synapse_name):
+      # Randomize synapse weights with mean value = 0
+      weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
+      name = synapse_name
     
 
 class Layer:
@@ -100,6 +106,57 @@ class Layer:
 class Network:
     layers = []
     synapses = []
+
+    def main_tick(self):
+      layer_1 = sigmoid(np.dot(layer_0,syn_0))
+      layer_2 = sigmoid(np.dot(layer_1,syn_1))
+
+      # Hinton's dropout. Based on: http://iamtrask.github.io/2015/07/28/dropout/
+      if (training_mode):
+        layer_1 *= np.random.binomial([np.ones((len(layer_0),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
+
+      # Calculate output differences vs expected errors ("Confidence weighted error")
+      l2_error = expected_outputs - layer_2
+      l2_delta = l2_error * sigmoid_slope(layer_2)
+
+      l1_error = l2_delta.dot(syn_1.T)
+      l1_delta = l1_error * sigmoid_slope(layer_1)
+
+      # Nudge weights
+      syn_1 += alpha * ( layer_1.T.dot(l2_delta) )
+      syn_0 += alpha * ( layer_0.T.dot(l1_delta) )
+
+      # Print intermittently
+      current_accuracy = 100 * (1 - (np.mean(np.abs(l2_error))))
+      uptime = (datetime.now() - start_time).total_seconds()
+      if (int(uptime) > int(last_trace)):
+        print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
+        last_trace = uptime
+      
+
+   def main_loop(self):
+      print("===== NETWORK STARTED")
+      start_time = datetime.now()
+      last_trace = 0
+      iteration = 0
+      while(True):
+          iteration += 1
+
+          # We're done
+         if (current_accuracy >= target_accuracy):
+           print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
+                 " training steps with average test accuracy: " + str(current_accuracy) +
+                 "% in " + str(uptime) + "s")
+           break
+
+         # Timeout
+         if (uptime > max_training_time):
+           print("  TIMEOUT after " + str(iteration) +
+                 " training steps with average test accuracy: " + str(current_accuracy) +
+                 "% in " + str(uptime) + "s")
+           return
+          
+          
 
     def init(self):
         # Create layers
@@ -112,7 +169,18 @@ class Network:
 
         # Create synapses between layers
         for iter in xrange(layer_count - 1):
-            new_synapse = Synapse()
+            synapse_input_dimensions = hidden_dimensions
+            synapse_output_dimensions = hidden_dimensions
+            synapse_name = "Synapse L" + iter + " => L" + (iter + 1)
+
+            if (iter == 0):
+               # First layer special case
+               synapse_input_dimensions = input_dimensions
+            if (iter == (layer_count - 1)):
+               # Last layer special case
+               synapse_output_dimensions = output_dimensions
+
+            new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
             synapses.append(new_synapse)
 
 
@@ -122,65 +190,19 @@ class Network:
 """
 CODE START
 """
-# Randomize synapses (weight) layers, mean value = 0
-syn_0 = 2*np.random.random((3,hidden_dim)) - 1 # 3 inputs (from test data) => 4 outputs (next layer)
-syn_1 = 2*np.random.random((hidden_dim,1)) - 1 # 4 inputs, 1 output (final value)
+network_obj = Network()
 
 # Print starting synapses
 print("===== INITIAL (RANDOMIZED) WEIGHTS")
-print(str(syn_0))
-print(str(syn_1))
-print("")
+for iter in network_obj.synapses:
+   print(iter.name + " = " + str(iter.weights))
 
-# First layer is our input training data
-layer_0 = input_tests
+network_obj.main_loop()
+print("DONE")
 
-# Mainloop
-print("===== NETWORK STARTED")
-start_time = datetime.now()
-last_trace = 0
-iteration = 0
-while(True):
-    iteration += 1
-    
-    layer_1 = sigmoid(np.dot(layer_0,syn_0))
-    layer_2 = sigmoid(np.dot(layer_1,syn_1))
 
-    # Hinton's dropout
-    if (training_mode):
-        layer_1 *= np.random.binomial([np.ones((len(layer_0),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
+ """
 
-    # Calculate output differences vs expected errors ("Confidence weighted error")
-    l2_error = expected_outputs - layer_2
-    l2_delta = l2_error * sigmoid_slope(layer_2)
-
-    l1_error = l2_delta.dot(syn_1.T)
-    l1_delta = l1_error * sigmoid_slope(layer_1)
-    
-    # Nudge weights
-    syn_1 += alpha * ( layer_1.T.dot(l2_delta) )
-    syn_0 += alpha * ( layer_0.T.dot(l1_delta) )
-
-    # Print every now and then
-    current_accuracy = 100 * (1 - (np.mean(np.abs(l2_error))))
-    uptime = (datetime.now() - start_time).total_seconds()
-    if (int(uptime) > int(last_trace)):
-        print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
-        last_trace = uptime
-    
-    # We're done
-    if (current_accuracy >= target_accuracy):
-        print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
-              " training steps with average test accuracy: " + str(current_accuracy) +
-              "% in " + str(uptime) + "s")
-        break
-
-    # Timeout
-    if (uptime > max_training_time):
-        print("  TIMEOUT after " + str(iteration) +
-              " training steps with average test accuracy: " + str(current_accuracy) +
-              "% in " + str(uptime) + "s")
-        break
 
 output_layer = layer_2
 print("")
@@ -199,3 +221,4 @@ for i in xrange(len(layer_1)):
     print("  Test " + (str(i + 1)) + ". " + str(output_value) + ". Expected " + str(expected_value) + ". Diff = " + str(value_diff))
 print("")
 
+"""
