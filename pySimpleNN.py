@@ -4,16 +4,14 @@
 """
 CONFIGURATION
 """
-# Basic
-target_accuracy = 99.9       # stops when network training accuracy has been achieved
-training_mode = True         # disable when running real data
+target_accuracy = 99.99
+training_mode = True
 max_training_time = 60 * 5
-
-# Advanced
-alpha = 0.5                  # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
+starting_alpha = 10          # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
 dropout_percent = 0.1        # dropout rate
 hidden_dim = 4               # dimensions in hidden layers
-random_seed = 1              # a fixed seed is usually fine, so that we can reproduce tests
+random_seed = 1
+
 
 """
 SETUP
@@ -23,6 +21,8 @@ from math import *
 from datetime import *
 
 np.random.seed(random_seed)
+alpha = starting_alpha
+
 
 """
 TEST DATA
@@ -45,17 +45,18 @@ expected_outputs = np.array([[0,0,1,1,1,0,1,1]]).T
 FUNCTIONS AND CLASSES
 """
 # Sigmoid activation function and its derivative (maps any value to non-linear space between 0 and 1)
-def nonlin(x):
+def sigmoid(x):
     return 1/(1+np.exp(-x))
-def nonlin_derive(x):
+def sigmoid_slope(x):
     return x*(1-x)
-def sigmoid_to_deriv(output): # Gets the slope (derivative) for a non-linearized VALUE rather than a point
-    return output*(1-output)
+def value_to_slope(output):
+    return output*(1-output) # output to slope
+
 
 """
 CODE START
 """
-# Randomize synapses (weight) layers
+# Randomize synapses (weight) layers, mean = 0
 syn_0 = 2*np.random.random((3,4)) - 1 # 3 inputs (from test data) => 4 outputs (next layer)
 syn_1 = 2*np.random.random((4,1)) - 1 # 4 inputs, 1 output (final value)
 
@@ -66,36 +67,33 @@ print(str(syn_1))
 print("")
 
 # First layer is our input training data
-l0 = input_tests
-input_layer = l0
+layer_0 = input_tests
 
 # Mainloop
-print("===== NETWORK OUTPUT")
+print("===== NETWORK STARTED")
 start_time = datetime.now()
 last_trace = 0
 iteration = 0
 while(True):
     iteration += 1
     
-    # Calculate values and squish them
-    l1 = nonlin(np.dot(l0,syn_0))
-    l2 = nonlin(np.dot(l1,syn_1))
+    layer_1 = sigmoid(np.dot(layer_0,syn_0))
+    layer_2 = sigmoid(np.dot(layer_1,syn_1))
 
     # Hinton's dropout (only when training) - discards some values at random to avoid descending multiple nodes into the same (local) minimum
     if (training_mode):
-        l1 *= np.random.binomial([np.ones((len(input_layer),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
+        layer_1 *= np.random.binomial([np.ones((len(layer_0),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
-    # Calculate output differences vs expected errors (ie the "Confidence weighted error")
-    l2_error = expected_outputs - l2
-    l2_delta = l2_error*nonlin_derive(l2)
+    # Calculate output differences vs expected errors ("Confidence weighted error")
+    l2_error = expected_outputs - layer_2
+    l2_delta = l2_error * sigmoid_slope(layer_2)
 
-    # Remaining layer errors
     l1_error = l2_delta.dot(syn_1.T)
-    l1_delta = l1_error * nonlin_derive(l1)
+    l1_delta = l1_error * sigmoid_slope(layer_1)
     
-    # Nudge synapse weights individually
-    syn_1 += l1.T.dot(l2_delta)
-    syn_0 += np.dot(l0.T,l1_delta)
+    # Nudge weights
+    syn_1 += alpha * ( layer_1.T.dot(l2_delta) )
+    syn_0 += alpha * ( layer_0.T.dot(l1_delta) )
 
     # Print every now and then
     current_accuracy = 100 * (1 - (np.mean(np.abs(l2_error))))
@@ -104,7 +102,7 @@ while(True):
         print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
         last_trace = uptime
     
-    # Results are good enough    
+    # We're done
     if (current_accuracy >= target_accuracy):
         print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
               " training steps with average test accuracy: " + str(current_accuracy) +
@@ -119,7 +117,7 @@ while(True):
         break
 
 
-output_layer = l2
+output_layer = layer_2
 print("")
 
 # Print details
