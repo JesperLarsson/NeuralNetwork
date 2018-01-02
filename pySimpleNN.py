@@ -5,7 +5,7 @@
 CONFIGURATION
 """
 # Training
-target_accuracy = 99.99
+target_accuracy = 99.95
 max_training_time = 0 # training timeout in seconds, 0 = no timeout
 
 # Algorithm tweaks
@@ -92,6 +92,7 @@ class TrainingCase:
         expected_result = _expected_result
 """
 
+# Connection between two layers
 class Synapse:
    weights = None
    name = "N/A"
@@ -102,7 +103,7 @@ class Synapse:
       self.name = synapse_name
       print("  Created " + self.name + "(" + str(synapse_input_dimensions) + "/" + str(synapse_output_dimensions) + " dimensions)")
 
-
+# Holds a matrix of all neurons
 class Layer:
       neurons = None
       next_layer = None
@@ -110,12 +111,14 @@ class Layer:
       synapse_to_next_layer = None # Synapse object
       name = "N/A"
 
-      last_error_rate = 1.0
+      error_rate = 1.0
 
       def __init__(self, layer_name):
          print("  Created " + layer_name)
          self.name = layer_name
 
+      # Simple implementation of Hinton's dropout algorithm
+      #   This optimizes away (by luck) some edge cases where multiple search paths are converging towards the same (local) minimum by discarding some connections at random
       def hinton_dropout(self):
          if (self.previous_layer is None):
             # No dropout for input layer
@@ -123,65 +126,64 @@ class Layer:
          elif (self.next_layer is None):
             # No dropout for output layer
             return
-
-         # This optimizes away (by luck) some cases where multiple search paths are converging on the same (local) minimum slope
+         
          # Binomial picks some values at random in the given matrixes
          self.neurons *= np.random.binomial( [ np.ones((len(self.previous_layer.neurons),hidden_dimensions)) ], 1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
-
+      # Forward propagate our values to the next layer
       def forward_propagation(self):
          if (self.next_layer is None):
             return # this layer does non forward propagate (output layer)
 
          self.next_layer.neurons = sigmoid( np.dot(self.neurons, self.synapse_to_next_layer.weights) )
     
-      # recursive, call on first layer object to backpropagate entire chain
-      def backward_propagation(self):
+      # Back propagate synapse weight deltas from the back and forwards
+      # Recursive implementation, call on first(!) layer to backpropagate entire chain
+      def back_propagation(self):
          if (self.next_layer is None):
-            # This is the last layer, it compares to expected output rather than to the next layer
-            layer_error = expected_outputs - self.neurons
-            layer_delta = layer_error * sigmoid_slope(self.neurons)
-
-            # This layer never has a synapse to update
-            self.last_error_rate = layer_error
-            return layer_delta
+            # "Confidence weighted error":
+            #   This is the last layer, it compares to expected test data rather than to the next layer and never has a synapse to update            
+            self.error_rate = expected_outputs - self.neurons
+            weights_delta = self.error_rate * sigmoid_slope(self.neurons)
+            
+            return weights_delta
          else:
-            # Normal case, input + hidden layers
-            next_layer_delta = self.next_layer.backward_propagation()
+            # "Error weighted derivative":
+            #   Error differences are calculated from the adjustments we made to the next layer
+            #   This is the normal case for input and hidden layers
+            next_layer_delta = self.next_layer.back_propagation()
 
-            # Error differences are calculated from the adjustments we made to the next layer
-            layer_error = next_layer_delta.dot(self.synapse_to_next_layer.weights.T)
-            layer_delta = layer_error * sigmoid_slope(self.neurons)
+            self.error_rate = next_layer_delta.dot(self.synapse_to_next_layer.weights.T)
+            weights_delta = self.error_rate * sigmoid_slope(self.neurons)
 
             # Adjust weights from this to the next layer
-            # It's important we perform the changes AFTER we calculate our delta, since we want to adjust the previous layer based on the test deltas pre-adjustment
+            #   It's important we perform the changes AFTER we calculate our delta, since we want to adjust the previous layer based on the test deltas pre-adjustment
             self.synapse_to_next_layer.weights += alpha * ( self.neurons.T.dot(next_layer_delta) )
 
-            self.last_error_rate = layer_error
-            return layer_delta
+            return weights_delta
 
-
-
+# Top level object
 class Network:
    layers = []
    synapses = []
    training_mode = True
 
-   # Performs the actual network "magic"
+   # One network analyzation step, used for both training and real use
    def network_tick(self):
       # Forward propagate node values
       [l.forward_propagation() for l in self.layers]
 
-      # Hinton's dropout algorithm      
+      # Dropout (optimization) - only use dropout when training
       if (self.training_mode and use_dropout):
         [l.hinton_dropout() for l in self.layers]
 
-      # Calculate backward propagation deltas recursively (this is our "Confidence weighted error")
-      self.layers[0].backward_propagation()
+      # Calculate backward propagation deltas recursively
+      self.layers[0].back_propagation()
 
    def load_test_data(self):
       self.layers[0].neurons = input_tests
 
+   # Trains the network until a sufficiently high efficiency has been achieved
    def main_loop_training(self):
       start_time = datetime.now()
       last_trace = 0
@@ -190,20 +192,20 @@ class Network:
          iteration += 1
 
          self.network_tick()
-         output_error_rate = self.layers[-1].last_error_rate
+         output_error_rate = self.layers[-1].error_rate
 
          # Print intermittently
          current_accuracy = 100 * (1 - (np.mean(np.abs(output_error_rate))))
          uptime = (datetime.now() - start_time).total_seconds()
-         if (int(uptime) > int(last_trace)):
+         if (int(uptime) > int(last_trace) or last_trace == 0):
            print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
            last_trace = uptime
 
           # We're done
          if (current_accuracy >= target_accuracy):
            print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
-                 " training steps with average test accuracy: " + str(current_accuracy) +
-                 "% in " + str(uptime) + "s")
+                 " training steps " + 
+                 "in " + str(uptime) + "s")
            return True
 
          # Timeout
@@ -215,7 +217,7 @@ class Network:
        
        
    def __init__(self):
-      # Create layers, uses a "link list" model that chains them together
+      # Create layers
       for iter in range(layer_count):
          new_layer = Layer("Layer " + str(iter))
          self.layers.append(new_layer)
@@ -242,7 +244,7 @@ class Network:
          new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
          self.synapses.append(new_synapse)
 
-         # Add synapse pointer to layer
+         # Add synapse pointer to layer, last layer has no synapse
          self.layers[iter].synapse_to_next_layer = new_synapse
 
 
@@ -253,6 +255,7 @@ class Network:
 CODE ENTRY POINT
 """
 print("===== INITIATING NETWORK")
+print("  Targetting " + str(target_accuracy) + "% accuracy")
 network = Network()
 network.load_test_data()
 print("")
