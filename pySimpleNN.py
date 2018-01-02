@@ -24,6 +24,12 @@ output_dimensions = 1
 """
 SETUP
 """
+import sys
+if sys.version_info[0] < 3:
+   print("You are running an old version of Python which is not compatible with this script. Please install Python version 3 or higher")
+   raw_input("Press enter to exit") # We use raw_input, normal input function is dangerous in Python 2.X (but not Python 3)
+   sys.exit(1)
+
 try:
       import numpy as np
 except ImportError:
@@ -35,9 +41,10 @@ except ImportError:
       import numpy as np
    except ImportError:
       #  install using "pip install numpy" when in path C:\Python3\Scripts
-      print("Unable to find numpy, please install it manually by running 'pip install numpy' in your python scripts folder")
+      print("Unable to find numpy")
       input("Press enter to exit")
       sys.exit(2)
+      
 from math import *
 from datetime import *
 
