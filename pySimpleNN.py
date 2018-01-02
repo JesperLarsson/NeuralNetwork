@@ -1,26 +1,51 @@
 # -*- coding: utf-8 -*-
-# Copyright Jesper Larsson 2018
+# Copyright Jesper Larsson 2018, Linkoping
 
+print("")
 """
 CONFIGURATION
 """
+# Basic
 target_accuracy = 99.99
 training_mode = True
 max_training_time = 60 * 5
+
+# Algorithm
 starting_alpha = 10 # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
 dropout_percent = 0.1
-hidden_dim = 32 # dimension of hidden layers
-random_seed = 1
+
+# Network layout
+hidden_layers = 1 # number of hidden layers
+hidden_dimensions = 32
+input_dimensions = 3
+output_dimensions = 1
+
+
 """
 SETUP
 """
-import numpy as np
+try:
+      import numpy as np
+except ImportError:
+   try:
+      # Try to install it via package manager
+      print("Installing numpy...")
+      import pip
+      pip.main(['install', "numpy"])
+      import numpy as np
+   except ImportError:
+      #  install using "pip install numpy" when in path C:\Python3\Scripts
+      print("Unable to find numpy, please install it manually by running 'pip install numpy' in your python scripts folder")
+      input("Press enter to exit")
+      sys.exit(2)
 from math import *
 from datetime import *
 
-np.random.seed(random_seed)
+np.random.seed(1)
+
 alpha = starting_alpha
 
+layer_count = hidden_layers + 2 # hidden layers + input + output
 
 """
 TEST DATA
@@ -47,8 +72,51 @@ def sigmoid(x):
     return 1/(1+np.exp(-x))
 def sigmoid_slope(x):
     return x*(1-x)
-#def value_to_slope(output):
-#    return output*(1-output)
+
+    
+# Input training data sample
+class TrainingCase:
+    input_values = None
+    expected_result = None
+
+    def __init__(self, _input_values, _expected_result):
+        input_values = _input_values
+        expected_result = _expected_result
+
+
+class Synapse:
+    weights = None
+
+    def __init__(self, input_dimensions, output_dimensions):
+      # Randomize starting weights
+      weights = 2*np.random.random((input_dimensions,output_dimensions)) - 1
+    
+
+class Layer:
+    next_layer = None
+
+    
+
+class Network:
+    layers = []
+    synapses = []
+
+    def init(self):
+        # Create layers
+        for iter in xrange(layer_count):
+            new_layer = Layer()
+            layers.append(new_layer)
+
+            if (iter > 0):
+               layers[iter - 1].next_layer = new_layer # Set next layer in chain
+
+        # Create synapses between layers
+        for iter in xrange(layer_count - 1):
+            new_synapse = Synapse()
+            synapses.append(new_synapse)
+
+
+            
 
 
 """
