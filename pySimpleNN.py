@@ -4,14 +4,13 @@
 """
 CONFIGURATION
 """
-# Basic
-target_accuracy = 99.9
-training_mode = True
-randomization_mode = False
-max_training_time = 60 * 5
+# Training
+target_accuracy = 99.99
+max_training_time = 0 # training timeout in seconds, 0 = no timeout
 
-# Algorithm
+# Algorithm tweaks
 starting_alpha = 10 # relative change on each iteration, lower values makes us less likely to "overshoot" our target values, but it can take longer to get close to the result we want
+use_dropout = True
 dropout_percent = 0.1
 
 # Network layout
@@ -94,51 +93,83 @@ class Synapse:
       # Randomize synapse weights with mean value = 0
       self.weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
       self.name = synapse_name
-      print("  Created synapse " + self.name + "(" + str(synapse_input_dimensions) + "/" + str(synapse_output_dimensions) + " dimensions)")
+      print("  Created " + self.name + "(" + str(synapse_input_dimensions) + "/" + str(synapse_output_dimensions) + " dimensions)")
 
 
 class Layer:
       neurons = None
       next_layer = None
+      previous_layer = None
+      synapse_to_next_layer = None # Synapse object
       name = "N/A"
 
+      last_error_rate = 1.0
+
       def __init__(self, layer_name):
-         print("  Created layer " + layer_name)
+         print("  Created " + layer_name)
          self.name = layer_name
+
+      def hinton_dropout(self):
+         if (self.previous_layer is None):
+            # No dropout for input layer
+            return
+         elif (self.next_layer is None):
+            # No dropout for output layer
+            return
+
+         # This optimizes away (by luck) some cases where multiple search paths are converging on the same (local) minimum slope
+         # Binomial picks some values at random in the given matrixes
+         self.neurons *= np.random.binomial( [ np.ones((len(self.previous_layer.neurons),hidden_dimensions)) ], 1-dropout_percent)[0] * (1.0/(1-dropout_percent))
+
+
+      def perform_forward_propagation(self):
+         if (self.next_layer is None):
+            return # this layer does non forward propagate (output layer)
+
+         self.next_layer.neurons = sigmoid( np.dot(self.neurons, self.synapse_to_next_layer.weights) )
     
+      def recursive_backward_propagation(self):
+         if (self.next_layer is None):
+            # This is the last layer, it compares to expected output rather than to the next layer
+            layer_error = expected_outputs - self.neurons
+            layer_delta = layer_error * sigmoid_slope(self.neurons)
+
+            # This layer never has a synapse to update
+            self.last_error_rate = layer_error
+            return layer_delta
+         else:
+            # Normal case, input + hidden layers
+            next_layer_delta = self.next_layer.recursive_backward_propagation()
+
+            # Error differences are calculated from the adjustments we made to the next layer
+            layer_error = next_layer_delta.dot(self.synapse_to_next_layer.weights.T)
+            layer_delta = layer_error * sigmoid_slope(self.neurons)
+
+            # Adjust weights from this to the next layer
+            # It's important we perform the changes AFTER we calculate our delta, since we want to adjust the previous layer based on the test deltas pre-adjustment
+            self.synapse_to_next_layer.weights += alpha * ( self.neurons.T.dot(next_layer_delta) )
+
+            self.last_error_rate = layer_error
+            return layer_delta
+
+
 
 class Network:
    layers = []
    synapses = []
+   training_mode = True
 
    # Performs the actual network "magic"
    def network_tick(self):
-      layer_0 = self.layers[0]
-      layer_1 = self.layers[1]
-      layer_2 = self.layers[2]
-      syn_0 = self.synapses[0]
-      syn_1 = self.synapses[1]
+      # Forward propagate node values
+      [l.perform_forward_propagation() for l in self.layers]
 
-      layer_1.neurons = sigmoid(np.dot(layer_0.neurons,syn_0.weights))
-      layer_2.neurons = sigmoid(np.dot(layer_1.neurons,syn_1.weights))
+      # Hinton's dropout algorithm      
+      if (self.training_mode and use_dropout):
+        [l.hinton_dropout() for l in self.layers]
 
-      # Hinton's dropout algorithm
-      #   This optimizes away (by luck) some cases where multiple search paths are converging on the same (local) minimum slope
-      if (training_mode):
-        layer_1.neurons *= np.random.binomial([np.ones((len(layer_0.neurons),hidden_dimensions))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
-
-      # Calculate output differences vs expected errors ("Confidence weighted error")
-      l2_error = expected_outputs - layer_2.neurons
-      l2_delta = l2_error * sigmoid_slope(layer_2.neurons)
-
-      l1_error = l2_delta.dot(syn_1.weights.T)
-      l1_delta = l1_error * sigmoid_slope(layer_1.neurons)
-
-      # Nudge weights
-      syn_1.weights += alpha * ( layer_1.neurons.T.dot(l2_delta) )
-      syn_0.weights += alpha * ( layer_0.neurons.T.dot(l1_delta) )      
-
-      return l2_error
+      # Calculate backward propagation deltas recursively (this is our "Confidence weighted error")
+      self.layers[0].recursive_backward_propagation()
 
    def load_test_data(self):
       self.layers[0].neurons = input_tests
@@ -150,7 +181,8 @@ class Network:
       while(True):
          iteration += 1
 
-         output_error_rate = self.network_tick()
+         self.network_tick()
+         output_error_rate = self.layers[-1].last_error_rate
 
          # Print intermittently
          current_accuracy = 100 * (1 - (np.mean(np.abs(output_error_rate))))
@@ -164,28 +196,29 @@ class Network:
            print("  Achieved target " + str(target_accuracy) + "% accuracy after " + str(iteration) +
                  " training steps with average test accuracy: " + str(current_accuracy) +
                  "% in " + str(uptime) + "s")
-           break
+           return True
 
          # Timeout
-         if (uptime > max_training_time):
+         if (uptime > max_training_time and max_training_time != 0):
            print("  TIMEOUT after " + str(iteration) +
                  " training steps with average test accuracy: " + str(current_accuracy) +
                  "% in " + str(uptime) + "s")
-           return
+           return False
        
        
    def __init__(self):
-      # Create layers
+      # Create layers, uses a "link list" model that chains them together
       for iter in range(layer_count):
          new_layer = Layer("Layer " + str(iter))
          self.layers.append(new_layer)
 
+         # Set linked list pointers
          if (iter > 0):
-            self.layers[iter - 1].next_layer = new_layer # Set next layer in chain
+            self.layers[iter - 1].next_layer = new_layer
+            new_layer.previous_layer = self.layers[iter - 1]
 
       # Create synapses between layers
       for iter in range(layer_count - 1):
-         print("i =" + str(iter) + "AA" + str((layer_count - 1)))
          synapse_input_dimensions = hidden_dimensions
          synapse_output_dimensions = hidden_dimensions
          synapse_name = "Synapse L" + str(iter) + " => L" + str(iter + 1)
@@ -200,6 +233,9 @@ class Network:
 
          new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
          self.synapses.append(new_synapse)
+
+         # Add synapse pointer to layer
+         self.layers[iter].synapse_to_next_layer = new_synapse
 
 
             
@@ -221,7 +257,9 @@ print("")
 
 # Start training
 print("===== NETWORK TRAINING")
-network.main_loop_training()
+success = network.main_loop_training()
+if (success):
+   network.training_mode = False
 print("")
 
 # Print details
@@ -230,10 +268,11 @@ for iter in network.synapses:
    print(iter.name + " = " + str(iter.weights))
 print("")
 
-print("===== FINAL TRAINING RESULTS")
+# Trace test results, this trace only supports 1-dimension outputs
+print("===== TRAINING CASES RESULTS")
 output_neurons = network.layers[-1].neurons
 for i in range(len(output_neurons)):
-    output_value = output_neurons[i][0] # 0 because we only have a single output result
+    output_value = output_neurons[i][0]
     expected_value = expected_outputs[i][0]
     value_diff = fabs(expected_value - output_value)
     print("  Test " + (str(i + 1)) + ". " + str(output_value) + ". Expected " + str(expected_value) + ". Diff = " + str(value_diff))
