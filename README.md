@@ -1,5 +1,5 @@
 # About this project #
-My personal experimentation with neural networks in Python 3. Requires python package "numpy" but has no other dependencies.
+My personal experimentation with neural networks in Python 3. Requires python package "numpy" which is installed automatically.
 
 # Math and resources #
 Youtube series by 3Blue1Brown (highly recommended introduction!):
