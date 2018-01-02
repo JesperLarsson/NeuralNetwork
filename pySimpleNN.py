@@ -44,7 +44,7 @@ except ImportError:
       print("Unable to find numpy")
       input("Press enter to exit")
       sys.exit(2)
-      
+
 from math import *
 from datetime import *
 
@@ -129,13 +129,14 @@ class Layer:
          self.neurons *= np.random.binomial( [ np.ones((len(self.previous_layer.neurons),hidden_dimensions)) ], 1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
 
-      def perform_forward_propagation(self):
+      def forward_propagation(self):
          if (self.next_layer is None):
             return # this layer does non forward propagate (output layer)
 
          self.next_layer.neurons = sigmoid( np.dot(self.neurons, self.synapse_to_next_layer.weights) )
     
-      def recursive_backward_propagation(self):
+      # recursive, call on first layer object to backpropagate entire chain
+      def backward_propagation(self):
          if (self.next_layer is None):
             # This is the last layer, it compares to expected output rather than to the next layer
             layer_error = expected_outputs - self.neurons
@@ -146,7 +147,7 @@ class Layer:
             return layer_delta
          else:
             # Normal case, input + hidden layers
-            next_layer_delta = self.next_layer.recursive_backward_propagation()
+            next_layer_delta = self.next_layer.backward_propagation()
 
             # Error differences are calculated from the adjustments we made to the next layer
             layer_error = next_layer_delta.dot(self.synapse_to_next_layer.weights.T)
@@ -169,14 +170,14 @@ class Network:
    # Performs the actual network "magic"
    def network_tick(self):
       # Forward propagate node values
-      [l.perform_forward_propagation() for l in self.layers]
+      [l.forward_propagation() for l in self.layers]
 
       # Hinton's dropout algorithm      
       if (self.training_mode and use_dropout):
         [l.hinton_dropout() for l in self.layers]
 
       # Calculate backward propagation deltas recursively (this is our "Confidence weighted error")
-      self.layers[0].recursive_backward_propagation()
+      self.layers[0].backward_propagation()
 
    def load_test_data(self):
       self.layers[0].neurons = input_tests
