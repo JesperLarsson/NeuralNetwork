@@ -5,7 +5,7 @@
 CONFIGURATION
 """
 # Basic
-target_accuracy = 99.99
+target_accuracy = 99.9
 training_mode = True
 randomization_mode = False
 max_training_time = 60 * 5
@@ -16,8 +16,8 @@ dropout_percent = 0.1
 
 # Network layout
 hidden_layers = 1 # number of hidden layers
-hidden_dimensions = 32
-input_dimensions = 3
+hidden_dimensions = 4
+input_dimensions = 3 # input/output dimensions are inherintly tied to the training data
 output_dimensions = 1
 
 
@@ -94,7 +94,7 @@ class Synapse:
       # Randomize synapse weights with mean value = 0
       self.weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
       self.name = synapse_name
-      print("  Created synapse " + self.name)
+      print("  Created synapse " + self.name + "(" + str(synapse_input_dimensions) + "/" + str(synapse_output_dimensions) + " dimensions)")
 
 
 class Layer:
@@ -122,7 +122,8 @@ class Network:
       layer_1.neurons = sigmoid(np.dot(layer_0.neurons,syn_0.weights))
       layer_2.neurons = sigmoid(np.dot(layer_1.neurons,syn_1.weights))
 
-      # Hinton's dropout. Based on: http://iamtrask.github.io/2015/07/28/dropout/
+      # Hinton's dropout algorithm
+      #   This optimizes away (by luck) some cases where multiple search paths are converging on the same (local) minimum slope
       if (training_mode):
         layer_1.neurons *= np.random.binomial([np.ones((len(layer_0.neurons),hidden_dimensions))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
@@ -141,10 +142,8 @@ class Network:
 
    def load_test_data(self):
       self.layers[0].neurons = input_tests
-      print("Loaded test data OK")
 
-   def main_loop(self):
-      print("===== NETWORK STARTED")
+   def main_loop_training(self):
       start_time = datetime.now()
       last_trace = 0
       iteration = 0
@@ -186,15 +185,17 @@ class Network:
 
       # Create synapses between layers
       for iter in range(layer_count - 1):
+         print("i =" + str(iter) + "AA" + str((layer_count - 1)))
          synapse_input_dimensions = hidden_dimensions
          synapse_output_dimensions = hidden_dimensions
          synapse_name = "Synapse L" + str(iter) + " => L" + str(iter + 1)
 
          if (iter == 0):
-            # First layer special case
+            # First obj special case
             synapse_input_dimensions = input_dimensions
-         if (iter == (layer_count - 1)):
-            # Last layer special case
+
+         if (iter == (layer_count - 2)):
+            # Last obj special case
             synapse_output_dimensions = output_dimensions
 
          new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
@@ -205,38 +206,35 @@ class Network:
 
 
 """
-CODE START
+CODE ENTRY POINT
 """
-network_obj = Network()
+print("===== INITIATING NETWORK")
+network = Network()
+network.load_test_data()
+print("")
 
-# Print starting synapses
-print("===== INITIAL (RANDOMIZED) WEIGHTS")
-for iter in network_obj.synapses:
+# Print starting synapse weights
+print("===== STARTING WEIGHTS")
+for iter in network.synapses:
    print(iter.name + " = " + str(iter.weights))
+print("")
 
-network_obj.load_test_data()
-network_obj.main_loop()
-print("DONE")
-
-
-"""
-
-
-output_layer = layer_2
+# Start training
+print("===== NETWORK TRAINING")
+network.main_loop_training()
 print("")
 
 # Print details
 print("===== CALCULATED WEIGHTS")
-print(str(syn_0))
-print(str(syn_1))
+for iter in network.synapses:
+   print(iter.name + " = " + str(iter.weights))
 print("")
 
-print("===== FINAL RESULTS")
-for i in xrange(len(layer_1)):
-    output_value = output_layer[i][0] # 0 because we only have a single output result
+print("===== FINAL TRAINING RESULTS")
+output_neurons = network.layers[-1].neurons
+for i in range(len(output_neurons)):
+    output_value = output_neurons[i][0] # 0 because we only have a single output result
     expected_value = expected_outputs[i][0]
     value_diff = fabs(expected_value - output_value)
     print("  Test " + (str(i + 1)) + ". " + str(output_value) + ". Expected " + str(expected_value) + ". Diff = " + str(value_diff))
 print("")
-
-"""
