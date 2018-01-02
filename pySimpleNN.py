@@ -21,6 +21,7 @@ input_dimensions = 3
 output_dimensions = 1
 
 
+
 """
 SETUP
 """
@@ -41,10 +42,7 @@ except ImportError:
 from math import *
 from datetime import *
 
-if (randomization_mode):
-   np.random.seed(1) # easy data replication / debugging
-else:
-   np.random.seed(int(datetime.now().total_seconds)
+np.random.seed(1) # easier debugging without true seed
 
 alpha = starting_alpha
 
@@ -89,50 +87,61 @@ class TrainingCase:
 """
 
 class Synapse:
-    weights = None
-    name = "N/A"
+   weights = None
+   name = "N/A"
 
-    def __init__(self, synapse_input_dimensions, synapse_output_dimensions, synapse_name):
+   def __init__(self, synapse_input_dimensions, synapse_output_dimensions, synapse_name):
       # Randomize synapse weights with mean value = 0
-      weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
-      name = synapse_name
-    
+      self.weights = 2*np.random.random((synapse_input_dimensions, synapse_output_dimensions)) - 1
+      self.name = synapse_name
+      print("  Created synapse " + self.name)
+
 
 class Layer:
-    next_layer = None
+      neurons = None
+      next_layer = None
+      name = "N/A"
 
+      def __init__(self, layer_name):
+         print("  Created layer " + layer_name)
+         self.name = layer_name
     
 
 class Network:
-    layers = []
-    synapses = []
+   layers = []
+   synapses = []
 
-    def main_tick(self):
-      layer_1 = sigmoid(np.dot(layer_0,syn_0))
-      layer_2 = sigmoid(np.dot(layer_1,syn_1))
+   # Performs the actual network "magic"
+   def network_tick(self):
+      layer_0 = self.layers[0]
+      layer_1 = self.layers[1]
+      layer_2 = self.layers[2]
+      syn_0 = self.synapses[0]
+      syn_1 = self.synapses[1]
+
+      layer_1.neurons = sigmoid(np.dot(layer_0.neurons,syn_0.weights))
+      layer_2.neurons = sigmoid(np.dot(layer_1.neurons,syn_1.weights))
 
       # Hinton's dropout. Based on: http://iamtrask.github.io/2015/07/28/dropout/
       if (training_mode):
-        layer_1 *= np.random.binomial([np.ones((len(layer_0),hidden_dim))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
+        layer_1.neurons *= np.random.binomial([np.ones((len(layer_0.neurons),hidden_dimensions))],1-dropout_percent)[0] * (1.0/(1-dropout_percent))
 
       # Calculate output differences vs expected errors ("Confidence weighted error")
-      l2_error = expected_outputs - layer_2
-      l2_delta = l2_error * sigmoid_slope(layer_2)
+      l2_error = expected_outputs - layer_2.neurons
+      l2_delta = l2_error * sigmoid_slope(layer_2.neurons)
 
-      l1_error = l2_delta.dot(syn_1.T)
-      l1_delta = l1_error * sigmoid_slope(layer_1)
+      l1_error = l2_delta.dot(syn_1.weights.T)
+      l1_delta = l1_error * sigmoid_slope(layer_1.neurons)
 
       # Nudge weights
-      syn_1 += alpha * ( layer_1.T.dot(l2_delta) )
-      syn_0 += alpha * ( layer_0.T.dot(l1_delta) )
+      syn_1.weights += alpha * ( layer_1.neurons.T.dot(l2_delta) )
+      syn_0.weights += alpha * ( layer_0.neurons.T.dot(l1_delta) )      
 
-      # Print intermittently
-      current_accuracy = 100 * (1 - (np.mean(np.abs(l2_error))))
-      uptime = (datetime.now() - start_time).total_seconds()
-      if (int(uptime) > int(last_trace)):
-        print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
-        last_trace = uptime
-      
+      return l2_error
+
+   def load_test_data(self):
+      self.layers[0].neurons = input_tests
+      print("Loaded test data OK")
 
    def main_loop(self):
       print("===== NETWORK STARTED")
@@ -140,7 +149,16 @@ class Network:
       last_trace = 0
       iteration = 0
       while(True):
-          iteration += 1
+         iteration += 1
+
+         output_error_rate = self.network_tick()
+
+         # Print intermittently
+         current_accuracy = 100 * (1 - (np.mean(np.abs(output_error_rate))))
+         uptime = (datetime.now() - start_time).total_seconds()
+         if (int(uptime) > int(last_trace)):
+           print("  Iteration " + str(iteration) + " accuracy: " + str(current_accuracy) + "%")
+           last_trace = uptime
 
           # We're done
          if (current_accuracy >= target_accuracy):
@@ -155,33 +173,32 @@ class Network:
                  " training steps with average test accuracy: " + str(current_accuracy) +
                  "% in " + str(uptime) + "s")
            return
-          
-          
+       
+       
+   def __init__(self):
+      # Create layers
+      for iter in range(layer_count):
+         new_layer = Layer("Layer " + str(iter))
+         self.layers.append(new_layer)
 
-    def init(self):
-        # Create layers
-        for iter in xrange(layer_count):
-            new_layer = Layer()
-            layers.append(new_layer)
+         if (iter > 0):
+            self.layers[iter - 1].next_layer = new_layer # Set next layer in chain
 
-            if (iter > 0):
-               layers[iter - 1].next_layer = new_layer # Set next layer in chain
+      # Create synapses between layers
+      for iter in range(layer_count - 1):
+         synapse_input_dimensions = hidden_dimensions
+         synapse_output_dimensions = hidden_dimensions
+         synapse_name = "Synapse L" + str(iter) + " => L" + str(iter + 1)
 
-        # Create synapses between layers
-        for iter in xrange(layer_count - 1):
-            synapse_input_dimensions = hidden_dimensions
-            synapse_output_dimensions = hidden_dimensions
-            synapse_name = "Synapse L" + iter + " => L" + (iter + 1)
+         if (iter == 0):
+            # First layer special case
+            synapse_input_dimensions = input_dimensions
+         if (iter == (layer_count - 1)):
+            # Last layer special case
+            synapse_output_dimensions = output_dimensions
 
-            if (iter == 0):
-               # First layer special case
-               synapse_input_dimensions = input_dimensions
-            if (iter == (layer_count - 1)):
-               # Last layer special case
-               synapse_output_dimensions = output_dimensions
-
-            new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
-            synapses.append(new_synapse)
+         new_synapse = Synapse(synapse_input_dimensions, synapse_output_dimensions, synapse_name)
+         self.synapses.append(new_synapse)
 
 
             
@@ -197,11 +214,12 @@ print("===== INITIAL (RANDOMIZED) WEIGHTS")
 for iter in network_obj.synapses:
    print(iter.name + " = " + str(iter.weights))
 
+network_obj.load_test_data()
 network_obj.main_loop()
 print("DONE")
 
 
- """
+"""
 
 
 output_layer = layer_2
