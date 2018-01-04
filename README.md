@@ -10,8 +10,8 @@ https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi
 State-of-the-art articles:
 http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html
 
-Python sample code:
-http://iamtrask.github.io/
+Simple code examples:
+http://natureofcode.com/book/chapter-10-neural-networks/
 
 # Sample run #
 <pre>
