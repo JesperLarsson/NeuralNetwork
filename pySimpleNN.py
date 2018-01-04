@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright Jesper Larsson 2018, github.com/JesperLarsson
+# Copyright Jesper Larsson, Linköping, 2017-2018, github.com/JesperLarsson
 
 """
 CONFIGURATION
@@ -26,7 +26,8 @@ hidden_dimensions = 4
 input_dimensions = 3
 output_dimensions = 1
 
-
+# Misc
+sleeptime_ms = 1 # so we don't freeze up the computer
 
 """
 SETUP
@@ -53,6 +54,7 @@ except ImportError:
 
 from math import *
 from datetime import *
+import time
 
 np.random.seed(1) # easier debugging without true seed
 nl = "\n"
@@ -146,9 +148,11 @@ class Layer:
          if (use_bias):
             weighted_neurons = (weighted_neurons + synapse_bias)
 
+         print (str(weighted_neurons))
+
          self.next_layer.neurons = sigmoid( weighted_neurons )
     
-      # Back propagate synapse weight deltas from the back and forwards
+      # Back propagate synapse weight deltas from the backmost layer
       #   Recursive implementation, call on first(!) layer to update the entire chain
       def back_propagation(self):
          if (self.next_layer is None):
@@ -269,6 +273,8 @@ class Network:
                  " training steps with average test accuracy: " + str(current_accuracy) +
                  "% in " + str(uptime) + "s")
            return False
+
+         time.sleep(sleeptime_ms / 1000)
 
    def __init__(self):
       # Create layers
