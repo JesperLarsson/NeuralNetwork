@@ -47,7 +47,7 @@ except ImportError:
       pip.main(['install', "numpy"])
       import numpy as np
    except ImportError:
-      print("Unable to install numpy, install using 'pip install numpy' in path C:\Python3\Scripts")
+      print("Unable to install numpy, install manully using 'pip install numpy' in path C:\Python3\Scripts")
       input("Press enter to exit")
       sys.exit(2)
 
@@ -88,7 +88,9 @@ def sigmoid_slope(x):
     return x*(1-x)
 
 def cost_function(target, calculated):
-   return target - calculated
+   cost = target - calculated
+   
+   return cost
 
 """    
 # Input training data sample
