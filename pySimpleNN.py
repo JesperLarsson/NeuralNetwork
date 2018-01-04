@@ -89,19 +89,8 @@ def sigmoid_slope(x):
 
 def cost_function(target, calculated):
    cost = target - calculated
-   
+
    return cost
-
-"""    
-# Input training data sample
-class TrainingCase:
-    input_values = None
-    expected_result = None
-
-    def __init__(self, _input_values, _expected_result):
-        input_values = _input_values
-        expected_result = _expected_result
-"""
 
 # Connection between two layers
 class Synapse:
@@ -122,6 +111,7 @@ class Synapse:
 class Layer:
       neurons = None
 
+      # axons
       next_layer = None
       previous_layer = None
       synapse_to_next_layer = None
@@ -154,7 +144,7 @@ class Layer:
 
          weighted_neurons = np.dot(self.neurons, self.synapse_to_next_layer.weights)
          if (use_bias):
-            weighted_neurons = (weighted_neurons + synapse_bias)            
+            weighted_neurons = (weighted_neurons + synapse_bias)
 
          self.next_layer.neurons = sigmoid( weighted_neurons )
     
